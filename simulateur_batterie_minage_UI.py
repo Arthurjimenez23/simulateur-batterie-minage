@@ -8,16 +8,18 @@ SOC_MIN = 1.5
 BATTERY_EFF = 0.95
 BATTERY_POWER_LIMIT = 15
 TARGET_MINER = 20
-THRESHOLD_SPOT = 55
+DEFAULT_PV_COST = 55  # €/MWh
 
 st.title("Simulateur de gestion batterie - Minage optimisé")
 
 st.sidebar.header("Entrées utilisateur")
 prix_spot_input = st.sidebar.text_area("Prix SPOT (24 valeurs, séparées par des virgules)",
     "15,78,15,63,3,55,6,65,15,02,12,05,10,91,12,86,7,26,0,1,80,80,70,80,80,80,80,80,16,04,15,4,24,13,40,24,30,1")
-pv_forecast_input = st.sidebar.file_uploader("Charger le fichier de prévision PV (96 valeurs, CSV avec 1 colonne)")
 
-def simulate(prix_spot_hourly, pv_forecast_15min):
+pv_forecast_input = st.sidebar.file_uploader("Charger le fichier de prévision PV (96 valeurs, CSV avec 1 colonne)")
+pv_cost = st.sidebar.number_input("Prix de revient du PV (€/MWh)", min_value=0.0, value=DEFAULT_PV_COST)
+
+def simulate(prix_spot_hourly, pv_forecast_15min, pv_threshold):
     intervals_per_hour = 4
     total_steps = 96
     soc = [30]
@@ -30,7 +32,7 @@ def simulate(prix_spot_hourly, pv_forecast_15min):
     prix_spot_15min = np.repeat(prix_spot_hourly, intervals_per_hour)
 
     daytime_indices = list(range(32, 80))
-    pv_eligible_indices = [i for i in daytime_indices if prix_spot_15min[i] > THRESHOLD_SPOT]
+    pv_eligible_indices = [i for i in daytime_indices if prix_spot_15min[i] > pv_threshold]
     sorted_daytime_by_price = sorted(daytime_indices, key=lambda i: prix_spot_15min[i])
     night_indices = list(range(80, 96)) + list(range(0, 32))
     expensive_slots = [i for i in night_indices if prix_spot_15min[i] > THRESHOLD_SPOT]
@@ -115,7 +117,7 @@ if st.sidebar.button("Lancer la simulation"):
                 if len(pv_forecast) != 96:
                     st.error("Le fichier de production PV doit contenir exactement 96 valeurs.")
                 else:
-                    df_result = simulate(prix_spot, pv_forecast)
+                    df_result = simulate(prix_spot, pv_forecast, pv_cost)
                     st.success("Simulation terminée.")
                     st.dataframe(df_result)
                     st.download_button("📥 Télécharger les résultats", df_result.to_csv(index=False), file_name="resultats_simulation.csv")
